@@ -9,7 +9,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from time import sleep
 
 options=Options()
@@ -87,7 +87,6 @@ class times:
         self.endmintime = dt(self.start_time.year, self.start_time.month, self.start_time.day, self.start_time.hour, self.end_minmin)
         self.endmaxtime = dt(self.start_time.year, self.start_time.month, self.start_time.day, self.start_time.hour, self.end_maxmin)
 
-
 def countdown(secs):
     for i in range(secs,1,-1):
         print(f"{i} seconds left until refreshing..", end="\r")
@@ -139,48 +138,6 @@ def check_creds(User, Pass):
         Pass = gp(prompt='Enter a new password please: ')      
     return User, Pass
 
-def login_user(User, Pass):
-    logged_in = login_check()
-    if logged_in == False:
-        try:
-            browser.get(link.login)
-            username = browser.find_element(By.ID, 'username')
-            password = browser.find_element(By.ID, 'password')
-            loginbut = browser.find_element(By.CLASS_NAME, 'btn-primary')
-            print("Logging in ..")
-            username.clear()
-            username.send_keys(User)
-            password.clear()
-            password.send_keys(Pass)
-            loginbut.click()
-            sleep(1)
-            if "Ungültige Anmeldedaten. Versuchen Sie es noch einmal!" in browser.page_source:
-                print("Wrong credentials. Please check your input!")
-                User, Pass = check_creds(User, Pass)
-                sleep(2)
-                login_user(User, Pass)
-            else:
-                logged_in = True
-                print('Logged in!')
-                return
-        except NoSuchElementException:
-            print('Error. Already signed in.')
-            logged_in = True
-        else:
-            logged_in = True
-            try:
-                WebDriverWait(browser, 5).until(EC.alert_is_present(), 'No alerts around.')
-                alert = browser.switch_to.alert
-                alert.accept()
-            except:
-                return
-        finally:
-            return logged_in
-    else:
-        print('Already signed in.')
-        logged_in = True
-        return logged_in
-
 def login_check():
     browser.get(link.login)
     sleep(0.99)
@@ -192,49 +149,108 @@ def login_check():
         else:
             print("This shouldn't have happened.")
             sleep(0.99)
-            exit()
+            #exit()
     except:
         print("Something went wrong.")
         sleep(0.99)
-        exit()
+        #exit()
     else:
         logged_in = False
     finally:
         return logged_in
 
+def login_user(User, Pass):
+    browser.get(link.login)
+    try:
+        username = browser.find_element(By.ID, 'username')
+        password = browser.find_element(By.ID, 'password')
+        loginbut = browser.find_element(By.CLASS_NAME, 'btn-primary')
+        print("Logging in ..")
+        username.clear()
+        username.send_keys(User)
+        password.clear()
+        password.send_keys(Pass)
+        loginbut.click()
+        sleep(1)
+        ungueltigDE = "Ungültige Anmeldedaten. Versuchen Sie es noch einmal!"
+        ungueltigEN = "Invalid login, please try again"
+        if ungueltigDE in browser.page_source or ungueltigEN in browser.page_source:
+            print("Wrong credentials. Please check your input!")
+            User, Pass = check_creds(User, Pass)
+            sleep(1.5)
+            login_user(User, Pass)
+        else:
+            handleAlert()
+            handleDatapref()
+            logged_in = True
+    except NoSuchElementException:
+        # Already logged in
+        logged_in = True
+    except:
+        logged_in = False
+    finally:
+        return logged_in
+
+def handleAlert():
+    # For future implementation
+    try:
+        alert = browser.find_element(By.TAG_NAME, "alert")
+    except TimeoutException:
+        pass
+    except NoSuchElementException:
+        pass
+    else:
+        try:
+            browser.switch_to.alert.dismiss()
+        except:
+            browser.switch_to.alert.accept()
+
+def handleDatapref():
+    # For future implementation
+    try:
+        pref = browser.find_element(By.CLASS_NAME, "modal-dialog-scrollable")
+    except NoSuchElementException:
+        pass
+    except TimeoutException:
+        pass
+    else:
+        pref.find_element(By.TAG_NAME, "button").click()
+
+def getFullName():
+    status = login_check()
+    if status:
+        browser.get("https://lernplattform.gfn.de/login/index.php")
+        soup = bs(browser.page_source, 'html.parser')
+        fullname = soup.find("span", {"id": "actionmenuaction-1"}).text
+    else:
+        pass
+    return fullname
+
 def ZE_get():
     # gets status (bool: True = running) and timestamps (string: in %H:%M [if available]) of Zeiterfassung
     # called by update class-method from ZE.class
     browser.get(link.home)
-    soup = bs(browser.page_source, 'html.parser')
-    Block = soup.h5.parent
-    zeiten = Block('p')
-    if zeiten == None:
+    Block = browser.find_element(By.CLASS_NAME, "card-text.content.mt-3")
+    if Block.text.split("\n")[0][-1].isdigit():
+        startzeitstr = Block.text.split("\n")[0]
+        startzeit = startzeitstr[-5:]
+        if Block.text.split("\n")[1][-1].isdigit():
+            endzeitstr = Block.text.split("\n")[1]
+            endzeit = endzeitstr[-5:]
+            status = False
+        else:
+           endzeit = 'NaN'
+           status = True
+    else:
         startzeit = 'NaN'
         endzeit = 'NaN'
         status = False
-        return status, startzeit, endzeit
-    else:
-        startzeitstr = Block('p')[0].text
-        startzeit = startzeitstr[-5:]
-        try:
-            endzeitstr = Block('p')[1].text
-            endzeit = endzeitstr[-5:]
-        except IndexError:
-            endzeit = 'NaN'
-            status = True
-        except:
-            startzeit, endzeit = 'Error'
-        else:
-            status = False
-        finally:
-            return status, startzeit, endzeit
+    return status, startzeit, endzeit
 
 def RandStartZeit():
     now = dt.now()
-    if now < times.startmintime:        #8:19
+    if now < times.startmintime:
         randi = dt(now.year,now.month,now.day,8,randint(times.start_minmin,times.start_maxmin))
-        randi = dt(now.year,now.month,now.day,8,randint((now.minute),times.start_maxmin))
     if randi < now: # If too late add 1 minute to now
         randi = dt(now.year,now.month,now.day,8,now.minute+1)
     return randi
@@ -358,8 +374,7 @@ def HomeOrNot(): #returns True for home or False for Standort and boolean for da
 useri, passi = enter_creds()
 logged_in = login_user(useri, passi)
 home = HomeOrNot()
-dates = ('2023/06/19', '2023/06/20', '2023/06/21', '2023/06/22', '2023/06/23', '2023/06/26', '2023/06/27', '2023/06/28', '2023/06/29', '2023/06/30', '2023/07/03', '2023/07/04', '2023/07/05', '2023/07/06', '2023/07/07', '2023/07/10', '2023/07/11', '2023/07/12', '2023/07/13', '2023/07/14', '2023/07/17', '2023/07/18', '2023/07/19', '2023/07/20', '2023/07/21', '2023/08/07', '2023/08/08', '2023/08/09', '2023/08/10', '2023/08/11', '2023/08/14', '2023/08/16', '2023/08/17', '2023/08/18', '2023/08/21', '2023/08/22', '2023/08/23', '2023/08/24', '2023/08/25', '2023/08/28', '2023/08/29', '2023/08/30', '2023/08/31', '2023/09/01', '2023/09/04', '2023/09/05', '2023/09/06', '2023/09/07', '2023/09/08', '2023/09/11', '2023/09/12', '2023/09/13', '2023/09/14', '2023/09/15', '2023/09/18', '2023/09/19', '2023/09/20', '2023/09/21', '2023/09/22', '2023/09/25', '2023/09/26', '2023/09/27', '2023/09/28', '2023/09/29', '2023/10/02', '2023/10/04', '2023/10/05', '2023/10/06', '2023/10/09', '2023/10/10', '2023/10/11', '2023/10/12', '2023/10/13', '2023/10/16', '2023/10/17', '2023/10/18', '2023/10/19', '2023/10/20', '2023/10/23', '2023/10/24', '2023/10/25', '2023/10/26', '2023/10/27', '2023/10/30', '2023/11/02', '2023/11/03', '2023/11/06', '2023/11/07', '2023/11/08', '2023/11/09', '2023/11/10', '2023/11/13', '2023/11/14', '2023/11/15', '2023/11/16', '2023/11/17', '2023/11/20', '2023/11/21', '2023/11/22', '2023/11/23', '2023/11/24', '2023/11/27', '2023/11/28', '2023/11/29', '2023/11/30', '2023/12/01', '2023/12/04', '2023/12/05', '2023/12/06', '2023/12/07', '2023/12/08', '2023/12/11', '2023/12/12', '2023/12/13', '2023/12/14', '2023/12/15', '2023/12/18', '2023/12/19', '2023/12/20', '2023/12/21', '2023/12/22', '2024/01/08', '2024/01/09', '2024/01/10', '2024/01/11', '2024/01/12', '2024/01/15', '2024/01/16', '2024/01/17', '2024/01/18', '2024/01/19', '2024/01/22', '2024/01/23', '2024/01/24', '2024/01/25', '2024/01/26', '2024/01/29', '2024/01/30', '2024/01/31', '2024/02/01', '2024/02/02', '2024/02/05', '2024/02/06', '2024/02/07', '2024/02/08', '2024/02/09', '2024/02/12', '2024/02/13', '2024/02/14', '2024/02/15', '2024/02/16', '2024/02/19', '2024/02/20', '2024/02/21', '2024/02/22', '2024/02/23', '2024/02/26', '2024/02/27', '2024/02/28', '2024/02/29', '2024/03/01', '2024/03/04', '2024/03/05', '2024/03/06', '2024/03/07', '2024/03/11', '2024/03/12', '2024/03/13', '2024/03/14', '2024/03/15', '2024/03/18', '2024/03/19', '2024/03/20', '2024/03/21', '2024/03/22', '2024/04/08', '2024/04/09', '2024/04/10', '2024/04/11', '2024/04/12', '2024/04/15', '2024/04/16', '2024/04/17', '2024/04/18', '2024/04/19', '2024/04/22', '2024/04/23', '2024/04/24', '2024/04/25', '2024/04/26', '2024/04/29', '2024/04/30', '2024/05/02', '2024/05/03', '2024/05/06', '2024/05/07', '2024/05/08', '2024/05/10', '2024/05/13', '2024/05/14', '2024/05/15', '2024/05/16', '2024/05/17', '2024/05/21', '2024/05/22', '2024/05/23', '2024/05/24', '2024/05/27', '2024/05/28', '2024/05/29', '2024/05/31', '2024/06/03', '2024/06/04', '2024/06/05', '2024/06/06', '2024/06/07', '2024/06/10', '2024/06/11', '2024/06/12', '2024/06/13', '2024/06/14', '2024/06/17', '2024/06/18', '2024/06/19', '2024/06/20', '2024/06/21', '2024/06/24', '2024/06/25', '2024/06/26', '2024/06/27', '2024/06/28', '2024/07/01', '2024/07/02', '2024/07/03', '2024/07/04', '2024/07/05', '2024/07/08', '2024/07/09', '2024/07/10', '2024/07/11', '2024/07/12', '2024/07/15', '2024/07/16', '2024/07/17', '2024/07/18', '2024/07/19', '2024/08/05', '2024/08/06', '2024/08/07', '2024/08/08', '2024/08/09', '2024/08/12', '2024/08/13', '2024/08/14', '2024/08/16', '2024/08/19', '2024/08/20', '2024/08/21', '2024/08/22', '2024/08/23', '2024/08/26', '2024/08/27', '2024/08/28', '2024/08/29', '2024/08/30', '2024/09/02', '2024/09/03', '2024/09/04', '2024/09/05', '2024/09/06', '2024/09/09', '2024/09/10', '2024/09/11', '2024/09/12', '2024/09/13', '2024/09/16', '2024/09/17', '2024/09/18', '2024/09/19', '2024/09/20')
-
+dates = ['2023/06/19', '2023/06/20', '2023/06/21', '2023/06/22', '2023/06/23', '2023/06/26', '2023/06/27', '2023/06/28', '2023/06/29', '2023/06/30', '2023/07/03', '2023/07/04', '2023/07/05', '2023/07/06', '2023/07/07', '2023/07/10', '2023/07/11', '2023/07/12', '2023/07/13', '2023/07/14', '2023/07/17', '2023/07/18', '2023/07/19', '2023/07/20', '2023/07/21', '2023/08/07', '2023/08/08', '2023/08/09', '2023/08/10', '2023/08/11', '2023/08/14', '2023/08/16', '2023/08/17', '2023/08/18', '2023/08/21', '2023/08/22', '2023/08/23', '2023/08/24', '2023/08/25', '2023/08/28', '2023/08/29', '2023/08/30', '2023/08/31', '2023/09/01', '2023/09/04', '2023/09/05', '2023/09/06', '2023/09/07', '2023/09/08', '2023/09/11', '2023/09/12', '2023/09/13', '2023/09/14', '2023/09/15', '2023/09/18', '2023/09/19', '2023/09/20', '2023/09/21', '2023/09/22', '2023/09/25', '2023/09/26', '2023/09/27', '2023/09/28', '2023/09/29', '2023/10/02', '2023/10/04', '2023/10/05', '2023/10/06', '2023/10/09', '2023/10/10', '2023/10/11', '2023/10/12', '2023/10/13', '2023/10/16', '2023/10/17', '2023/10/18', '2023/10/19', '2023/10/20', '2023/10/23', '2023/10/24', '2023/10/25', '2023/10/26', '2023/10/27', '2023/10/30', '2023/11/02', '2023/11/03', '2023/11/06', '2023/11/07', '2023/11/08', '2023/11/09', '2023/11/10', '2023/11/13', '2023/11/14', '2023/11/15', '2023/11/16', '2023/11/17', '2023/11/20', '2023/11/21', '2023/11/22', '2023/11/23', '2023/11/24', '2023/11/27', '2023/11/28', '2023/11/29', '2023/11/30', '2023/12/01', '2023/12/04', '2023/12/05', '2023/12/06', '2023/12/07', '2023/12/08', '2023/12/11', '2023/12/12', '2023/12/13', '2023/12/14', '2023/12/15', '2023/12/18', '2023/12/19', '2023/12/20', '2023/12/21', '2023/12/22', '2024/01/08', '2024/01/09', '2024/01/10', '2024/01/11', '2024/01/12', '2024/01/15', '2024/01/16', '2024/01/17', '2024/01/18', '2024/01/19', '2024/01/22', '2024/01/23', '2024/01/24', '2024/01/25', '2024/01/26', '2024/01/29', '2024/01/30', '2024/01/31', '2024/02/01', '2024/02/02', '2024/02/05', '2024/02/06', '2024/02/07', '2024/02/08', '2024/02/09', '2024/02/12', '2024/02/13', '2024/02/14', '2024/02/15', '2024/02/16', '2024/02/19', '2024/02/20', '2024/02/21', '2024/02/22', '2024/02/23', '2024/02/26', '2024/02/27', '2024/02/28', '2024/02/29', '2024/03/01', '2024/03/04', '2024/03/05', '2024/03/06', '2024/03/07', '2024/03/11', '2024/03/12', '2024/03/13', '2024/03/14', '2024/03/15', '2024/03/18', '2024/03/19', '2024/03/20', '2024/03/21', '2024/03/22', '2024/04/08', '2024/04/09', '2024/04/10', '2024/04/11', '2024/04/12', '2024/04/15', '2024/04/16', '2024/04/17', '2024/04/18', '2024/04/19', '2024/04/22', '2024/04/23', '2024/04/24', '2024/04/25', '2024/04/26', '2024/04/29', '2024/04/30', '2024/05/02', '2024/05/03', '2024/05/06', '2024/05/07', '2024/05/08', '2024/05/10', '2024/05/13', '2024/05/14', '2024/05/15', '2024/05/16', '2024/05/17', '2024/05/21', '2024/05/22', '2024/05/23', '2024/05/24', '2024/05/27', '2024/05/28', '2024/05/29', '2024/05/31', '2024/06/03', '2024/06/04', '2024/06/05', '2024/06/06', '2024/06/07', '2024/06/10', '2024/06/11', '2024/06/12', '2024/06/13', '2024/06/14', '2024/06/17', '2024/06/18', '2024/06/19', '2024/06/20', '2024/06/21', '2024/06/24', '2024/06/25', '2024/06/26', '2024/06/27', '2024/06/28', '2024/07/01', '2024/07/02', '2024/07/03', '2024/07/04', '2024/07/05', '2024/07/08', '2024/07/09', '2024/07/10', '2024/07/11', '2024/07/12', '2024/07/15', '2024/07/16', '2024/07/17', '2024/07/18', '2024/07/19', '2024/08/05', '2024/08/06', '2024/08/07', '2024/08/08', '2024/08/09', '2024/08/12', '2024/08/13', '2024/08/14', '2024/08/16', '2024/08/19', '2024/08/20', '2024/08/21', '2024/08/22', '2024/08/23', '2024/08/26', '2024/08/27', '2024/08/28', '2024/08/29', '2024/08/30', '2024/09/02', '2024/09/03', '2024/09/04', '2024/09/05', '2024/09/06', '2024/09/09', '2024/09/10', '2024/09/11', '2024/09/12', '2024/09/13', '2024/09/16', '2024/09/17', '2024/09/18', '2024/09/19', '2024/09/20']
 
 while True:
     clear()
