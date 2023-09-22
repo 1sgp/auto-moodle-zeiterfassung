@@ -243,7 +243,7 @@ def saveSelection(days: int) -> list:
         savedSelection_days.append(ondays[todaysindex+day])
     return savedSelection_days
 
-def main():
+def main(browser):
     useri, passi = enter_creds()
     # logged_in = login_user(browser, useri, passi)
     home, days = HomeOrNot()
