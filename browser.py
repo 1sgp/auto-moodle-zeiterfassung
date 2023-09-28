@@ -16,7 +16,7 @@ class link:
 
 def init() -> object:
     options=Options()
-    #options.add_argument('-headless')
+    options.add_argument('-headless')
     browser=webdriver.Firefox(options=options)
     return browser
 
@@ -99,14 +99,11 @@ def Start(browser, home):
     elements = browser.find_element(By.CLASS_NAME, 'card-body.p-3')
     startbutton = elements.find_element(By.CLASS_NAME, 'btn-primary')
     selection = elements.find_elements(By.CLASS_NAME, 'form-check-input')
-    homeofficebox = selection[0]
-    standortbox = selection[-1]
     if home:
-        homeofficebox.click()
+        selection[0].click()
     else:
-        standortbox.click()
-    #startbutton.click()
-    print(f'startbutton.click()')
+        selection[-1].click()
+    startbutton.click()
     if browser.current_url == link.zestarted:
         return True
     else:
@@ -115,8 +112,7 @@ def Start(browser, home):
 def Ende(browser):
     browser.get(link.home)
     opensidepanel(browser)
-    #browser.find_element(By.CLASS_NAME, 'card-body.p-3').find_element(By.CLASS_NAME, 'btn-primary').click()
-    print(f"browser.find_element(By.CLASS_NAME, 'card-body.p-3').find_element(By.CLASS_NAME, 'btn-primary').click()")
+    browser.find_element(By.CLASS_NAME, 'card-body.p-3').find_element(By.CLASS_NAME, 'btn-primary').click()
     if browser.current_url == link.zestopped:
         return True
     else:
