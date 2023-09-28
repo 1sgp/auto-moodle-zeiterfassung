@@ -18,7 +18,9 @@ from browser import link as link
 from utils import clear, enter_creds, Times
 from wrap import main as Zeiterfassung
 
-u, p = enter_creds()
+us0r = ""
+w0rd = ""
+days = days
 
 def main():
     clear()
@@ -35,7 +37,8 @@ def main():
         
         while True:
             if dt.now().time() < t(16, 40):
-                status = Zeiterfassung(u, p)
+                selection = True if input("Home = 1, Standort = 2: ") == "1" else False
+                status = Zeiterfassung(us0r, w0rd, selection)
             else:
                 if dt.now().date().strftime("%Y/%m/%d") in dates:
                     days.pop(0)
